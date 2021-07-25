@@ -15,11 +15,11 @@ router.get("/", async (req, res) => {
   const page = parseInt(req.query.page) || 0;
   if (req.cookies.token) {
     auth(req, res);
-    let user = await User.findById(req.user._id);
-    posts = await Post.find({ postedTo: { $in: user.joined } })
+    let { bannedFrom } = await User.findById(req.user._id);
+    posts = await Post.find({ postedTo: { $nin: bannedFrom } })
       .sort({ _id: -1 })
       .populate("postedBy")
-      .populate("postedTo")
+      .populate({ path: 'postedTo' })
       .skip(page * 10)
       .limit(10);
   } else {
@@ -37,13 +37,29 @@ router.get("/", async (req, res) => {
 });
 
 router.get("/trending", async (req, res) => {
-  let posts = await Post.find({
-    $or: [{ image: { $exists: true } }, { url: { $exists: true } }],
-  })
-    .sort({ votes: -1 })
-    .limit(4)
-    .populate("postedBy")
-    .populate("postedTo");
+
+  let posts;
+
+  if(req.cookies.token) {
+    auth(req, res);
+    let user = await User.findById(req.user._id);
+    posts = await Post.find({
+      postedTo: { $nin: user.bannedFrom },
+      $or: [{ image: { $exists: true } }, { url: { $exists: true } }],
+    })
+      .sort({ votes: -1 })
+      .limit(4)
+      .populate("postedBy")
+      .populate("postedTo");
+  } else {
+    posts = await Post.find({
+      $or: [{ image: { $exists: true } }, { url: { $exists: true } }],
+    })
+      .sort({ votes: -1 })
+      .limit(4)
+      .populate("postedBy")
+      .populate("postedTo");
+  }
   res.send(posts);
 });
 

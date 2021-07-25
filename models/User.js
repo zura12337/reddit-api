@@ -27,6 +27,7 @@ const userSchema = new Schema({
   drafts: [{ type: Schema.Types.ObjectId, ref: "DraftPost" }],
   cakeDay: { type: String, default: time },
   flairs: [{}],
+  bannedFrom: [{ type: Schema.Types.ObjectId, ref: "Community" }],
   notifications: [
     {
       title: String,

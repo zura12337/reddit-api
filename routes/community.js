@@ -28,7 +28,7 @@ router.get("/", async (req, res) => {
   let community;
   if (req.cookies.token) {
     auth(req, res);
-    community = await Community.find({ banned: { $ne: req.user._id } });
+    community = await Community.find({ "banned.user": { $ne: req.user._id } });
   } else {
     community = await Community.find();
   }
@@ -40,18 +40,39 @@ router.get("/", async (req, res) => {
 router.get("/trending", async (req, res) => {
   const limit = parseInt(req.query.limit);
 
-  const community = await Community.find()
-    .sort({ membersCount: 1 })
-    .limit(limit ? limit : undefined);
+  let community;
+
+  if(req.cookies.token) {
+    auth(req, res);
+    community = await Community.find({ "banned.user": { $ne: req.user._id } })
+      .sort({ membersCount: 1 })
+      .limit(limit ? limit : undefined);
+  } else {
+    community = await Community.find()
+      .sort({ membersCount: 1 })
+      .limit(limit ? limit : undefined);
+  }
   res.send(community);
 });
 
 router.get("/trending/:category", async (req, res) => {
-  const community = await Community.find({
-    category: req.params.category,
-  }).sort({
-    membersCount: 1,
-  });
+  let community;
+  if(req.cookies.token) {
+    auth(req, res);
+    community = await Community.find({
+      "banned.user": { $ne: req.user._id },
+      category: req.params.category,
+    }).sort({
+      membersCount: 1,
+    });
+  } else {
+    community = await Community.find({
+      category: req.params.category,
+    }).sort({
+      membersCount: 1,
+    });
+  }
+
   if (community.length == 0) res.status(400).send("Communities not found.");
 
   res.send(community);
@@ -88,6 +109,9 @@ router.post("/", auth, async (req, res) => {
 });
 
 router.get("/:username", async (req, res) => {
+  if(req.cookies.token) {
+    auth(req, res)
+  }
   await Community.findOne({
     username: req.params.username,
   })
@@ -112,7 +136,18 @@ router.get("/:username", async (req, res) => {
     .populate({ path: "invitedModerators", model: "User" })
     .populate({ path: "createdBy", model: "User" })
     .then((community) => {
-      res.send(community);
+      if(req.user) {
+        community.banned.forEach(bannedUser => {
+          if(bannedUser.user.equals(req.user._id)) {
+            return res.send({ code: 403, message: "You don't have permissions to see this page." })
+          } else {
+            return res.send(community);
+          }
+        }) 
+        if(community.banned.length === 0) return res.send(community);
+      } else {
+        return res.send(community);
+      }
     });
 });
 
@@ -336,8 +371,6 @@ router.post("/new/flair/:username", auth, isAdmin, async (req, res) => {
 router.delete("/flair/:username/:flairId", auth, isAdmin, async (req, res) => {
   let community = await Community.findOne({ username: req.params.username });
 
-  console.log(community);
-
   community.flairs = community.flairs.filter(
     (flair) => flair.id !== req.params.flairId
   );
@@ -365,8 +398,8 @@ router.post("/:id/ban-user", auth, isAdmin, async (req, res) => {
   if (!community) return res.status(404).send("Community not found.");
 
   community.banned.forEach((bannedUser) => {
-    if (bannedUser.username === req.body.user)
-      return res.status(400).send("Bad request.");
+    if (bannedUser.user.equals(user._id)){
+    }
   });
 
   if (community.members.includes(user._id)) {
@@ -376,6 +409,7 @@ router.post("/:id/ban-user", auth, isAdmin, async (req, res) => {
     user.joined = user.joined.filter(
       (community) => !community.equals(user._id)
     );
+    community.membersCount--;
   }
 
   const bannedUser = {
@@ -383,9 +417,10 @@ router.post("/:id/ban-user", auth, isAdmin, async (req, res) => {
     ...req.body,
   };
 
-  if (bannedUser.until) {
-    let length = parseInt(bannedUser.until);
-    bannedUser.until = Math.floor(Date.now() / 1000) + length * 120;
+  if (bannedUser.until && !bannedUser.permanent) {
+    const now = Math.floor(Date.now() / 1000);
+    const banDays = bannedUser.until * 86400;
+    bannedUser.until = now + banDays;
   }
 
   if (community.banned && community.banned.length > 0) {
@@ -393,20 +428,25 @@ router.post("/:id/ban-user", auth, isAdmin, async (req, res) => {
   } else {
     community.banned = [bannedUser];
   }
+  
+  if(user.bannedFrom && !user.bannedFrom.includes(community._id)) {
+    user.bannedFrom.push(community._id);
+  }
+
   await community.save();
   await user.save();
 
-  return res.send(community);
+  res.send(community.banned);
 });
 
 router.delete("/:id/unban-user", auth, isAdmin, async (req, res) => {
   let user = await User.findOne({ username: req.body.username });
   if (!user) return res.status(404).send("User not found.");
 
-  let community = await Community.findById(req.params.id);
+  let community = await Community.findById(req.params.id).populate("banned.rules").populate("banned.user");
   if (!community) return res.status(404).send("Community not found.");
 
-  community.banned.forEach(() => {
+  community.banned.forEach((user) => {
     if (!user.username === req.body.username)
       return res.status(400).send("Bad request.");
   });
@@ -415,9 +455,12 @@ router.delete("/:id/unban-user", auth, isAdmin, async (req, res) => {
     (bannedUser) => !bannedUser.username === req.body.username
   );
 
-  await community.save();
+  user.bannedFrom = user.bannedFrom.filter(c => c._id === community._id)
 
-  res.send(community);
+  await community.save();
+  await user.save();
+
+  res.send(community.banned);
 });
 
 router.put("/:username", auth, isAdmin, async (req, res) => {
