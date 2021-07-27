@@ -80,7 +80,15 @@ io.on("connection", function (sockets) {
 app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(cors());
-app.options('*', cors())
+
+app.use(function (req, res, next) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    next();
+});
+
 app.use(express.json());
 app.use("/static", express.static(path.join(__dirname, "uploads/images")));
 app.use("/assets", express.static(path.join(__dirname, "uploads/assets")));
