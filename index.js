@@ -79,7 +79,7 @@ io.on("connection", function (sockets) {
 
 app.use(bodyParser.json());
 app.use(cookieParser());
-app.use(cors({ credentials: true, origin: "http://localhost:3000" }));
+app.use(cors({ credentials: true, origin: "*" }));
 app.use(express.json());
 app.use("/static", express.static(path.join(__dirname, "uploads/images")));
 app.use("/assets", express.static(path.join(__dirname, "uploads/assets")));
