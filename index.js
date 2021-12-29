@@ -20,8 +20,8 @@ const bodyParser = require("body-parser");
 
 require("dotenv").config();
 
-io.on("connection", function (sockets) {
-  sockets.on("post-vote", async function ({ action, status, postId, userId }) {
+io.on("connection", function(sockets) {
+  sockets.on("post-vote", async function({ action, status, postId, userId }) {
     let counter = 0;
 
     if (action === "like" && status === "") {
@@ -79,15 +79,12 @@ io.on("connection", function (sockets) {
 
 app.use(bodyParser.json());
 app.use(cookieParser());
-app.use(cors());
+const corsOptions = {
+  credentials: true, // This is important.
+  origin: true,
+}
 
-app.use(function (req, res, next) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', '*');
-    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
-    res.setHeader('Access-Control-Allow-Credentials', true);
-    next();
-});
+app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use("/static", express.static(path.join(__dirname, "uploads/images")));
@@ -95,14 +92,14 @@ app.use("/assets", express.static(path.join(__dirname, "uploads/assets")));
 app.use(express.urlencoded({ extended: true }));
 
 mongoose.connect(process.env.MONGO_URL, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  auth: {
-    user: process.env.MONGO_USER,
-    password: process.env.MONGO_PASS,
-  },
-  dbName: "reddit",
-});
+})
+  .then(() => {
+    console.log("Connected to db!")
+  })
+  .catch((err) => {
+    console.log('Error on start: ' + err.stack);
+    process.exit(1);
+  });
 
 app.use("/api/posts", posts);
 app.use("/api/users", users);
@@ -114,6 +111,6 @@ app.use("/api/category/", category);
 app.use("/api/rules/", rule);
 
 const port = process.env.PORT || 4000;
-const server = http.listen(port, () => {
+http.listen(port, () => {
   console.log("Listening on port " + port + "...");
 });

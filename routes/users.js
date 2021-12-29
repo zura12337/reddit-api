@@ -1,12 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const _ = require("lodash");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const auth = require("../middleware/auth");
 const nodemailer = require("nodemailer");
 const jwt = require("jsonwebtoken");
-const mongoose = require("mongoose");
-const ObjectId = mongoose.Types.ObjectId;
 
 const { User, validate } = require("../models/User");
 const { Community } = require("../models/Community");
@@ -285,13 +283,13 @@ router.get("/:id/following", async (req, res) => {
     .catch(() => res.status(400).send("Bad Request."));
 });
 
-router.post("/update-password", auth, async(req, res) => {
+router.post("/update-password", auth, async (req, res) => {
   const user = await User.findById(req.user._id);
-  
+
   const { oldPassword, newPassword } = req.body;
   const validPassword = await bcrypt.compare(oldPassword, user.password);
-  if(!validPassword) return res.status(400).send("Invalid password");
-  
+  if (!validPassword) return res.status(400).send("Invalid password");
+
   const salt = await bcrypt.genSalt(10);
 
   user.password = await bcrypt.hash(newPassword, salt);
@@ -399,7 +397,7 @@ router.post("/reset-password", async (req, res) => {
           `,
   };
 
-  transport.sendMail(message, function (err, info) {
+  transport.sendMail(message, function(err, info) {
     if (err) {
       res.status(400).send(err);
     } else {
